@@ -56,6 +56,43 @@ curl -s -o /dev/null -w '%{http_code}\n' "$(python3 -c "import json;print(json.l
 Если у сайта ещё нет Store — попросить любого агента с доступом к payments-серверу
 выполнить Путь A (это единственное действие "со стороны"; дальше сайт самодостаточен).
 
+## 0.2. API самообслуживания и песочница (без SSH и без реальных денег)
+
+База: `https://openpay.click/api/v1/onboard/…`. Доступ **только с IP, привязанного к Store**
+(с другого IP → 403); секреты в ответах API не возвращаются — ключи забираются по IP из
+`/onboard/<name>.env` (см. §0.1).
+
+| Метод | Endpoint | Что делает |
+|---|---|---|
+| GET | `/health` | `{"ok":true}` — API живой |
+| POST | `/store` | `{"name","site_url","webhook_url","ip"}` → создать Store + webhook + whitelist + ключи и nginx-доступ; ответ — `store_id` и `delivery_url` |
+| GET | `/store/<name>` | состояние Store: hooks/IP, есть ли ключи (без самих ключей) |
+| POST | `/sandbox/payment` | `{"name","order_id","amount"}` → создать тестовый wallet, вернуть `pay_url`; **деньги не списываются**, счёт не оплачивается |
+| POST | `/sandbox/webhook` | `{"name","order_id","amount"}` → подписать HMAC-SHA256 webhook ключом Store (канонический compact-JSON, заголовок `X-Signature`) и доставить на webhook сайта; ответ — HTTP-статус сайта |
+
+Полный цикл агента сайта (с его сервера, его IP):
+
+```bash
+# 1. ключи (если ещё нет): curl -s https://openpay.click/onboard/<name>.env -o /etc/<site>/dv.env && chmod 600 /etc/<site>/dv.env
+# 2. состояние Store (секретов нет):
+curl -s https://openpay.click/api/v1/onboard/store/<name>
+# 3. песочница: тестовый счёт → pay_url (оплаты НЕТ):
+curl -s -X POST https://openpay.click/api/v1/onboard/sandbox/payment \
+  -H 'Content-Type: application/json' -d '{"name":"<name>","order_id":"smoke-1","amount":0.10}'
+# 4. песочница: подписанный webhook → проверка той же подписи и обработчика сайта:
+curl -s -X POST https://openpay.click/api/v1/onboard/sandbox/webhook \
+  -H 'Content-Type: application/json' -d '{"name":"<name>","order_id":"smoke-1","amount":0.10}'
+# ожидание: {"ok":true,"webhook_status":200,"response":"OK","order_id":"sandbox-smoke-1"}
+# 5. только после 200 — реальный чекаут сайта и живая оплата (§7)
+```
+
+`order_id` в песочнице получает префикс `sandbox-` — такие заказы никогда не должны
+попадать в продакшен-БД как оплаченные; проверяй, что сайт их фильтрует (или чистит).
+
+Сервис: `/opt/dv-bundle/scripts/onboard_api.py`, systemd `dv-onboard-api` (127.0.0.1:18082),
+логи: `sudo journalctl -u dv-onboard-api -n 50`. Изменения конфигурации — в репозитории
+`github.com/martinroot/openpay`.
+
 ## 1. Стек (факт, проверено)
 
 | Компонент | Контейнер | Порт | Назначение |
