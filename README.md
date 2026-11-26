@@ -34,6 +34,10 @@ chmod 600 /etc/<site>/dv.env
 
 `https://openpay.click/api/v1/onboard/` (доступ только с IP сайта): `POST /store`, `GET /store/<name>`, `POST /sandbox/payment`, `POST /sandbox/webhook` — подписанный тестовый webhook без реальных денег. Полный цикл — `docs/PAYMENTS_INTEGRATION.md` §0.2.
 
+## Оps-лог
+
+`https://openpay.click/ops/` — простая админка: проекты и статусы платежей, лог обращений/чекаутов/вебхуков, фильтры по проекту и статусу. Доступ — basic auth ( creds выдаются отдельно, не в репо ). Агентам сайта доступна IP-закрытая запись: `POST https://openpay.click/ops/log/events` с `{project,kind,order_id,status,amount,pay_url,detail}`.
+
 ## Правила
 
 - Ключи и секреты — только в env сайта (0600), не в git и не в чаты.

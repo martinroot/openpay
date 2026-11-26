@@ -34,6 +34,17 @@ def out(h, obj, code=200):
     h.send_response(code); h.send_header("Content-Type", "application/json")
     h.send_header("Content-Length", str(len(body))); h.end_headers(); h.wfile.write(body)
 
+def log_event(project, kind, status="info", order_id="", amount=None, detail=None):
+    """Best-effort write to local ops log; never fail the payment flow."""
+    try:
+        d = json.dumps({"project": project, "kind": kind, "status": status,
+                        "order_id": order_id, "amount": amount, "detail": detail or {}}).encode()
+        req = urllib.request.Request("http://127.0.0.1:18083/api/events", data=d,
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=3).close()
+    except Exception:
+        pass
+
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     def log_message(self, fmt, *a): pass
@@ -63,6 +74,7 @@ class H(BaseHTTPRequestHandler):
             r = subprocess.run(["sudo", CREATE, b["name"], b["site_url"], b["webhook_url"], b["ip"]],
                                capture_output=True, text=True)
             if r.returncode: return err(self, 500, (r.stdout + r.stderr)[-400:])
+            log_event(b["name"], "store_created", "info", detail={"ip": b["ip"], "webhook": b["webhook_url"]})
             return out(self, {"ok": True, "store_id": store_id(b["name"]),
                               "delivery_url": "https://openpay.click/onboard/%s.env" % b["name"],
                               "detail": r.stdout.strip().splitlines()[-1]})
@@ -81,6 +93,7 @@ class H(BaseHTTPRequestHandler):
                     d = json.load(r)["data"]
             except Exception as e:
                 return err(self, 502, str(e))
+            log_event(name, "sandbox_payment", "sandbox", order, amount, {"wallet": d.get("id")})
             return out(self, {"ok": True, "sandbox": True, "wallet_id": d.get("id"),
                               "pay_url": d.get("pay_url"), "note": "Ничего не оплачено; это тестовый счёт."})
 
@@ -98,6 +111,8 @@ class H(BaseHTTPRequestHandler):
             sig = hmac.new(ckey.encode(), raw, hashlib.sha256).hexdigest()
             req = urllib.request.Request(hook, data=raw, headers={
                 "Content-Type": "application/json", "X-Signature": sig}, method="POST")
+            log_event(name, "sandbox_webhook", "sandbox",
+                      payload["store_external_id"], amount)
             try:
                 with urllib.request.urlopen(req, timeout=20) as r:
                     return out(self, {"ok": True, "sandbox": True, "webhook_status": r.status,
