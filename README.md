@@ -30,6 +30,10 @@ chmod 600 /etc/<site>/dv.env
 Дальше — по `docs/PAYMENTS_INTEGRATION.md` §0.1 (smoke-чекаут $0.10, проверка pay_url)
 и §7 (полный чек-лист).
 
+## API и песочница
+
+`https://openpay.click/api/v1/onboard/` (доступ только с IP сайта): `POST /store`, `GET /store/<name>`, `POST /sandbox/payment`, `POST /sandbox/webhook` — подписанный тестовый webhook без реальных денег. Полный цикл — `docs/PAYMENTS_INTEGRATION.md` §0.2.
+
 ## Правила
 
 - Ключи и секреты — только в env сайта (0600), не в git и не в чаты.
