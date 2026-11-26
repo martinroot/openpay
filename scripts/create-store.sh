@@ -10,10 +10,19 @@ SITE=${2:?site_url required}; HOOK=${3:?webhook_url required}; ALLOW_IP=${4:?all
 
 PSQL="docker exec dv-postgres-database psql -U postgres -d dv_merchant -qAtc"
 USER_ID=$($PSQL "select user_id from stores limit 1")
-STORE=$($PSQL "insert into stores (id,user_id,name,site,currency_id,rate_source,return_url,success_url,status,minimal_payment,public_payment_form_enabled) values (gen_random_uuid(),'$USER_ID','$NAME','$SITE','USD','binance','$SITE/','$SITE/?paid=1',true,0.10,true) on conflict do nothing returning id")
-[ -z "$STORE" ] && STORE=$($PSQL "select id from stores where name='$NAME' limit 1")
+STORE=$($PSQL "select id from stores where name='$NAME' limit 1")
+if [ -z "$STORE" ]; then
+  STORE=$($PSQL "insert into stores (id,user_id,name,site,currency_id,rate_source,return_url,success_url,status,minimal_payment,public_payment_form_enabled) values (gen_random_uuid(),'$USER_ID','$NAME','$SITE','USD','binance','$SITE/','$SITE/?paid=1',true,0.10,true) returning id")
+fi
 $PSQL "insert into store_webhooks (store_id,url,enabled,events) values ('$STORE','$HOOK',true,'[\"PaymentReceived\"]'::json) on conflict do nothing" >/dev/null
 $PSQL "insert into store_whitelist (ip,store_id) values ('$ALLOW_IP','$STORE') on conflict do nothing" >/dev/null
+# Валюты Store: копируем с эталонного Store, исключая DAI (нет курса в binance —
+# без этого walletprepare падает и форма оплаты остаётся без адресов).
+$PSQL "insert into store_currencies (currency_id,store_id)
+       select currency_id,'$STORE' from store_currencies
+       where store_id=(select id from stores where name='First Store' limit 1)
+         and currency_id not like 'DAI.%'
+       on conflict do nothing" >/dev/null
 APIKEY=$($PSQL "select key from store_api_keys where store_id='$STORE' limit 1")
 [ -z "$APIKEY" ] && APIKEY=$($PSQL "insert into store_api_keys (store_id,key) values ('$STORE','dv_${NAME}_'||md5(random()::text)||md5(random()::text)) returning key")
 CLIENTKEY=$($PSQL "select secret from store_secrets where store_id='$STORE' limit 1")

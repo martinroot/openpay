@@ -225,6 +225,7 @@ http_response_code(200); echo 'OK';
 | Вебхук не приходит | webhook URL в Store доступен извне, TLS валиден |
 | 401 при createInvoice | API_KEY истёк/не тот Store |
 | Ложные оплаты | подпись проверяется? CLIENT_KEY тот? |
+| Форма оплаты пустая / "ошибка", нет списка кошельков | `curl -s 'https://openpay.click/api/v1/public/wallet/<id>?locale=en' \| python3 -c "import json,sys;d=json.load(sys.stdin)['data'];print(len(d['addresses']),len(d['rates']))"` → должно быть >0; если `0 0` — в Store нет валют (`store_currencies`) или `walletprepare` упал на DAI (нет курса в binance). Лечение: `sudo /opt/dv-bundle/scripts/create-store.sh <name> <site> <webhook> <ip>` (копирует 18 валют без DAI) — для уже созданного кошелька адреса подтянутся автоматически |
 
 ## 9. Правила
 
