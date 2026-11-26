@@ -50,13 +50,13 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a): pass
 
     def do_GET(self):
-        if self.path == "/health":
+        if self.path in ("/health", "/api/v1/onboard/health"):
             return out(self, {"ok": True})
         if self.path.startswith("/api/v1/onboard/store/"):
             name = self.path.rsplit("/", 1)[-1].replace("'", "''")
             sid = store_id(name)
             if not sid: return err(self, 404, "store not found")
-            info = sql("select s.name||' | '||s.site||' | '||coalesce(w.url,'-')||' | '||coalesce(wl.ip,'-') from stores s left join store_webhooks w on w.store_id=s.id left join store_whitelist wl on wl.store_id=s.id where s.id='%s'" % sid)
+            info = sql("select distinct s.name||' | '||s.site||' | '||coalesce(w.url,'-')||' | '||coalesce(wl.ip,'-') from stores s left join store_webhooks w on w.store_id=s.id left join store_whitelist wl on wl.store_id=s.id where s.id='%s'" % sid)
             return out(self, {"ok": True, "store_id": sid, "info": info,
                               "delivery_url": "https://openpay.click/onboard/%s.env" % name,
                               "has_api_key": bool(api_key(name)), "has_client_key": bool(client_key(name))})

@@ -14,8 +14,8 @@ STORE=$($PSQL "select id from stores where name='$NAME' limit 1")
 if [ -z "$STORE" ]; then
   STORE=$($PSQL "insert into stores (id,user_id,name,site,currency_id,rate_source,return_url,success_url,status,minimal_payment,public_payment_form_enabled) values (gen_random_uuid(),'$USER_ID','$NAME','$SITE','USD','binance','$SITE/','$SITE/?paid=1',true,0.10,true) returning id")
 fi
-$PSQL "insert into store_webhooks (store_id,url,enabled,events) values ('$STORE','$HOOK',true,'[\"PaymentReceived\"]'::json) on conflict do nothing" >/dev/null
-$PSQL "insert into store_whitelist (ip,store_id) values ('$ALLOW_IP','$STORE') on conflict do nothing" >/dev/null
+$PSQL "insert into store_webhooks (store_id,url,enabled,events) select '$STORE','$HOOK',true,'[\"PaymentReceived\"]'::json where not exists (select 1 from store_webhooks where store_id='$STORE' and url='$HOOK')" >/dev/null
+$PSQL "insert into store_whitelist (ip,store_id) select '$ALLOW_IP','$STORE' where not exists (select 1 from store_whitelist where store_id='$STORE' and ip='$ALLOW_IP')" >/dev/null
 # Валюты Store: копируем с эталонного Store, исключая DAI (нет курса в binance —
 # без этого walletprepare падает и форма оплаты остаётся без адресов).
 $PSQL "insert into store_currencies (currency_id,store_id)
