@@ -93,6 +93,23 @@ curl -s -X POST https://openpay.click/api/v1/onboard/sandbox/webhook \
 логи: `sudo journalctl -u dv-onboard-api -n 50`. Изменения конфигурации — в репозитории
 `github.com/martinroot/openpay`.
 
+## 0.3. Логирование обращений и статусов (ops-лог)
+
+Админка: `https://openpay.click/ops/` — таблица проектов, статусов платежей и лог событий
+(чекауты, песочница, webhook'и, ошибки), фильтры по проекту/статусу. Доступ по basic auth
+( creds выдаются отдельно, в публичную инструкцию не включаются ).
+
+Агент сайта может писать события сам со своего IP (без basic auth):
+
+```bash
+curl -s -X POST https://openpay.click/ops/log/events -H 'Content-Type: application/json' \
+  -d '{"project":"<name>","kind":"checkout","order_id":"<id>","status":"pending","amount":0.10,"pay_url":"..."}'
+# → {"ok":true,"event_id":N}; с чужого IP → 403
+```
+
+Статусы: `pending`, `paid`, `sandbox`, `error`, `info`. Пиши события checkout → webhook → paid,
+чтобы статус заказа был виден в одном месте и привязан к проекту.
+
 ## 1. Стек (факт, проверено)
 
 | Компонент | Контейнер | Порт | Назначение |
